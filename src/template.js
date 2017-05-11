@@ -8,9 +8,13 @@ const defaultTemplate = baseTemplate('template.mustache')
 const partialDirectory = path.join(__dirname, '..', 'templates', 'partials')
 const loadTemplate = templateFile => fs.readFileSync(templateFile).toString()
 
-function getTemplatePartials () {
+function getTemplatePartials (optionDirectory=undefined) {
+  let partialPath = partialDirectory
+  if (optionDirectory) {
+    partialPath = optionDirectory
+  }
   const partials = {}
-  const fileList = fs.readdirSync(partialDirectory).map(file => {
+  const fileList = fs.readdirSync(partialPath).map(file => {
     if (file[0] === '.') {
       return undefined
     }
@@ -23,7 +27,7 @@ function getTemplatePartials () {
   })
 
   fileList.forEach(fileInfo => {
-    const templateFile = path.join(partialDirectory, fileInfo.name + '.' + fileInfo.extension)
+    const templateFile = path.join(partialPath, fileInfo.name + '.' + fileInfo.extension)
     partials[fileInfo.name] = loadTemplate(templateFile)
   })
 
