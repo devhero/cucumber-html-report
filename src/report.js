@@ -4,6 +4,7 @@ const R = require('ramda')
 const fs = require('fs')
 const path = require('path')
 const atob = require('atob')
+const moment = require('moment')
 const Mustache = require('mustache')
 const Directory = require('./directory')
 const Summary = require('./summary')
@@ -44,6 +45,12 @@ exports.validate = function (options) {
       options.maxScreenshots = 1000
     }
 
+    if (!options.hasOwnProperty('sortReport') || typeof options.sortReport === 'undefined') {
+      options.sortReport = true
+    }
+
+    options.timestamp = moment().format(options.dateformat || 'YYYY-MM-DD hh:mm:ss')
+
     resolve(options)
   })
 }
@@ -64,6 +71,7 @@ exports.createDirectory = function (options) {
 exports.writeReport = function (mustacheOptions) {
   const template = Template.load(mustacheOptions.template || Template.defaultTemplate)
   const partials = Template.getTemplatePartials(mustacheOptions.partials || undefined);
+  // const partials = mustacheOptions.template ? (mustacheOptions.partialsDir ? Template.getTemplatePartials(mustacheOptions.partialsDir) : {}) : Template.getTemplatePartials(path.join(__dirname, '..', 'templates', 'partials'))
   const html = Mustache.render(template, mustacheOptions, partials)
 
   return writeHTML(mustacheOptions.dest, mustacheOptions.name, html)
@@ -114,7 +122,7 @@ exports.createReport = function (options) {
           stepsSummary[index].failed++
           break
       }
-      stepDurationConverter(step, isCucumber2)
+      durationConverter(step.result, isCucumber2)
     })
 
     scenarios.push({
@@ -206,15 +214,15 @@ function createTagsArray (tags, isCucumber2) {
   })(tags)
 }
 
-function stepDurationConverter (step, isCucumber2) {
+function durationConverter (target, isCucumber2) {
   // Converts the duration from nanoseconds to seconds and minutes (if any)
-  let duration = step.result.duration
+  let duration = target.duration
   if (Duration.isMinuteOrMore(duration, isCucumber2)) {
     // If the test ran for more than a minute, also display minutes.
-    step.result.convertedDuration = Duration.formatDurationInMinutesAndSeconds(duration, isCucumber2)
+    target.convertedDuration = Duration.formatDurationInMinutesAndSeconds(duration, isCucumber2)
   } else if (Duration.isMinuteOrLess(duration, isCucumber2)) {
     // If the test ran for less than a minute, display only seconds.
-    step.result.convertedDuration = Duration.formatDurationInSeconds(duration, isCucumber2)
+    target.convertedDuration = Duration.formatDurationInSeconds(duration, isCucumber2)
   }
 }
 
@@ -265,22 +273,31 @@ function mappingTags (features) {
 }
 
 function isValidStep (step) {
-  return step.name !== undefined
+  return step.hidden === undefined || step.result.status.toLocaleLowerCase() === 'failed'
 }
 
 function loadCucumberJson (fileName) {
   return JSON.parse(fs.readFileSync(fileName, 'utf-8').toString())
 }
 
-function sortByStatusAndName (list) {
-  return R.sortWith([
+function sortByStatusAndName (list, options) {
+  var sortArray = [
     R.ascend(R.prop('status')),
     R.ascend(R.prop('name'))
-  ], list)
+  ]
+
+  /* If the option sortReport is false leave the report sorted by execution chronology */
+  if (!options.sortReport) {
+    sortArray = [
+      R.ascend(R.prop('line'))
+    ]
+  }
+
+  return R.sortWith(sortArray, list)
 }
 
 function sortScenariosForFeature (feature) {
-  feature.elements = sortByStatusAndName(feature.elements)
+  feature.elements = sortByStatusAndName(feature.elements, this)
   return feature
 }
 
@@ -289,7 +306,7 @@ function parseFeatures (options, features) {
     .map(getFeatureStatus)
     .map(parseTags)
     .map(processScenarios(options))
-    .map(sortScenariosForFeature))
+    .map(sortScenariosForFeature, options), options)
 }
 
 function createFileName (name) {
@@ -341,6 +358,10 @@ function isScenarioType (scenario) {
 function processScenario (options) {
   return function (scenario) {
     scenario.status = getScenarioStatus(scenario)
+    scenario.scenarioOptions = options.scenarioOptions
+    scenario.sessions.map(session => {
+      durationConverter(session, false)
+    })
     saveEmbeddedMetadata(options.dest, scenario, scenario.steps, options.maxScreenshots)
     scenario.steps = scenario.steps.filter(isValidStep)
   }
@@ -360,7 +381,7 @@ function saveEmbeddedMetadata (destPath, element, steps, maxScreenshots) {
     if (step.embeddings) {
       let imgCount = 1
       step.embeddings.forEach(embedding => {
-        if (embedding.mime_type === 'image/png') {
+        if (embedding.mime_type === 'image/png' || (embedding.media && embedding.media.type === 'image/png')) {
           if (imgCount <= maxScreenshots) {
             handleEmbeddingPng(embedding, element, destPath, imgCount)
           }
@@ -394,7 +415,7 @@ function handleEmbeddingPlainText (embedding, element) {
 }
 
 function handleEmbeddingBrowserLog (embedding, element) {
-  element.logs = new Buffer(embedding.data, 'base64').toString('ascii').split('\n')
+  element.logs = embedding.data.split('\n')
 }
 
 function mustacheImageFormatter () {

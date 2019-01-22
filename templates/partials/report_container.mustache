@@ -22,6 +22,9 @@
             <th style="width: 100px;">Condition</th>
             <th>Step</th>
             <th style="width: 100px;">Line</th>
+            {{#scenarioOptions.includeSessions}}
+            <th class="session" style="width: 100px;">Session</th>
+            {{/scenarioOptions.includeSessions}}
             <th class="duration" style="width: 100px;">Duration</th>
             <th style="width: 100px;">Status</th>
           </tr>
@@ -42,17 +45,43 @@
                 </table>
               </td>
               <td>{{line}}</td>
+              {{#scenarioOptions.includeSessions}}
+              <td class="session">{{session}}</td>
+              {{/scenarioOptions.includeSessions}}
               <td class="duration">{{#duration}}{{result.convertedDuration}}{{/duration}}</td>
               <td class="status">{{result.status}}</td>
             </tr>
 
             <tr class="hidden {{result.status}}">
               <td class="trace" colspan="4">
-                <pre>{{result.error_message}}</pre>
+                <code>{{result.error_message}}</code>
               </td>
               <td class="screenshot-link" data-index="{{index}}"></td>
             </tr>
           {{/steps}}
+
+          {{#scenarioOptions.includeSessions}}
+          <tr class="{{session}}">
+            <td colspan="6">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Session</th>
+                    <th>Duration</th>
+                  </tr>
+                </thead>
+                <tbody>
+                {{#sessions}}
+                  <tr>
+                    <td>{{session}}</td>
+                    <td>{{convertedDuration}}</td>
+                  </tr>
+                {{/sessions}}
+                </tbody>
+              </table>
+            </td>
+          </tr>
+          {{/scenarioOptions.includeSessions}}
 
         </table>
 
